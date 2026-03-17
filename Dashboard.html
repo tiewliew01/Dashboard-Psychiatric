@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard ทะเบียนเคลมงานจิตเวชและยาเสพติด</title>
+    
+    <!-- Libraries -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Plugin for Data Labels -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/js/all.min.js"></script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Sarabun', sans-serif; background-color: #ecfdf5; /* Green-50 */ }
+        .card { background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); transition: transform 0.2s; }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        /* Chart container height */
+        .chart-container { position: relative; height: 350px; width: 100%; }
+        .table-container { overflow-x: auto; margin-top: 1rem; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th { background-color: #10b981; color: white; padding: 8px; text-align: center; white-space: nowrap; }
+        td { border-bottom: 1px solid #e5e7eb; padding: 8px; text-align: center; white-space: nowrap; }
+        tr:nth-child(even) { background-color: #f0fdf4; }
+        tr:hover { background-color: #d1fae5; }
+        .admin-controls { display: none; } /* Hidden by default */
+        .swal2-popup { font-family: 'Sarabun', sans-serif; }
+        
+        /* Summary Cards */
+        .summary-card { color: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); position: relative; overflow: hidden; }
+        .summary-icon { position: absolute; right: 15px; bottom: 15px; opacity: 0.3; font-size: 4rem; }
+    </style>
+</head>
+<body class="text-gray-700">
+
+    <!-- Navbar -->
+    <nav class="bg-emerald-600 text-white shadow-lg sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <i class="fa-solid fa-chart-line text-2xl"></i>
+                <div>
+                    <h1 class="text-xl font-bold">Mental Health & Addiction Dashboard</h1>
+                    <p class="text-xs text-emerald-100">ระบบติดตามงานจิตเวชและยาเสพติด (ปีงบประมาณ 2569)</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-3">
+                <span id="admin-status" class="text-sm bg-emerald-700 px-3 py-1 rounded-full hidden"><i class="fa-solid fa-user-shield"></i> Admin Mode</span>
+                
+                <!-- Settings Button -->
+                <button onclick="openSettingsModal()" class="text-emerald-100 hover:text-white transition" title="ตั้งค่า Google Sheet">
+                    <i class="fa-solid fa-gear text-xl"></i>
+                </button>
+
+                <button onclick="toggleLoginModal()" id="login-btn" class="bg-white text-emerald-600 hover:bg-emerald-50 px-4 py-2 rounded-lg text-sm font-semibold transition">
+                    <i class="fa-solid fa-right-to-bracket"></i> Login
+                </button>
+                <button onclick="logout()" id="logout-btn" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition hidden">
+                    <i class="fa-solid fa-right-from-bracket"></i> Logout
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container mx-auto px-4 py-6">
+
+        <!-- Controls & Summary -->
+        <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+            <!-- Filter -->
+            <div class="flex items-center space-x-2 bg-white p-3 rounded-lg shadow-sm">
+                <label class="font-bold text-emerald-700"><i class="fa-solid fa-filter"></i> ตัวกรอง:</label>
+                <select id="monthFilter" class="border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-emerald-500" onchange="renderDashboard()">
+                    <option value="all">ทุกเดือน (ตามปีงบประมาณ)</option>
+                    <!-- Options populated by JS -->
+                </select>
+                <button onclick="refreshData()" class="text-emerald-600 hover:text-emerald-800 ml-2" title="รีเฟรชกราฟ"><i class="fa-solid fa-rotate"></i></button>
+            </div>
+
+            <!-- Admin Action Buttons -->
+            <div id="admin-actions" class="admin-controls flex space-x-2">
+                <button onclick="fetchGoogleSheet()" class="bg-blue-500 text-white px-3 py-2 rounded hover:bg-blue-600 text-sm shadow">
+                    <i class="fa-brands fa-google-drive"></i> ดึงข้อมูล Google Sheet
+                </button>
+                <label class="bg-emerald-500 text-white px-3 py-2 rounded hover:bg-emerald-600 text-sm cursor-pointer shadow">
+                    <i class="fa-solid fa-file-csv"></i> นำเข้า CSV
+                    <input type="file" id="csvInput" accept=".csv" class="hidden" onchange="handleFileUpload(this)">
+                </label>
+                <button onclick="openAddModal()" class="bg-orange-500 text-white px-3 py-2 rounded hover:bg-orange-600 text-sm shadow">
+                    <i class="fa-solid fa-plus"></i> เพิ่มข้อมูล
+                </button>
+            </div>
+        </div>
+
+        <!-- Summary Cards Section -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <!-- Income Card -->
+            <div class="summary-card bg-gradient-to-r from-emerald-500 to-teal-400">
+                <div class="relative z-10">
+                    <h3 class="text-lg font-medium opacity-90">รายรับรวม (Total Income)</h3>
+                    <p class="text-3xl font-bold mt-2" id="cardTotalIncome">0.00</p>
+                    <p class="text-sm mt-1 opacity-80">บาท</p>
+                </div>
+                <i class="fa-solid fa-hand-holding-dollar summary-icon"></i>
+            </div>
+            <!-- Expense Card -->
+            <div class="summary-card bg-gradient-to-r from-rose-500 to-pink-500">
+                <div class="relative z-10">
+                    <h3 class="text-lg font-medium opacity-90">รายจ่ายรวม (Total Expense)</h3>
+                    <p class="text-3xl font-bold mt-2" id="cardTotalExpense">0.00</p>
+                    <p class="text-sm mt-1 opacity-80">บาท</p>
+                </div>
+                <i class="fa-solid fa-file-invoice-dollar summary-icon"></i>
+            </div>
+            <!-- Balance Card -->
+            <div class="summary-card bg-gradient-to-r from-blue-600 to-indigo-500">
+                <div class="relative z-10">
+                    <h3 class="text-lg font-medium opacity-90">คงเหลือสุทธิ (Net Balance)</h3>
+                    <p class="text-3xl font-bold mt-2" id="cardTotalBalance">0.00</p>
+                    <p class="text-sm mt-1 opacity-80">บาท</p>
+                </div>
+                <i class="fa-solid fa-scale-balanced summary-icon"></i>
+            </div>
+        </div>
+
+        <!-- Dashboard Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 mb-8">
+            
+            <!-- 1. Financial Trends (Vertical Bar) -->
+            <div class="card p-4 col-span-1 md:col-span-1">
+                <h3 class="text-lg font-bold text-emerald-800 mb-2 border-b pb-2">
+                    <i class="fa-solid fa-money-bill-trend-up"></i> แนวโน้มการเงิน (รายรับ vs รายจ่าย)
+                </h3>
+                <div class="chart-container">
+                    <canvas id="chartFinance"></canvas>
+                </div>
+            </div>
+
+            <!-- 2. Income vs Expense Ratio (Horizontal Bar) -->
+            <div class="card p-4 col-span-1 md:col-span-1">
+                <h3 class="text-lg font-bold text-emerald-800 mb-2 border-b pb-2">
+                    <i class="fa-solid fa-scale-balanced"></i> สัดส่วนรายรับและรายจ่าย
+                </h3>
+                <div class="chart-container">
+                    <canvas id="chartRatio"></canvas>
+                </div>
+                <!-- Mini Summary Table for Ratio -->
+                <div class="mt-4 flex justify-around border-t pt-2">
+                    <div class="text-center">
+                        <p class="text-xs text-gray-500">รายได้รวม</p>
+                        <p class="text-base font-bold text-emerald-600" id="sumIncome">0</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-xs text-gray-500">รายจ่ายรวม</p>
+                        <p class="text-base font-bold text-red-500" id="sumExpense">0</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. Psychotherapy Stats -->
+            <div class="card p-4 col-span-1 md:col-span-1">
+                <h3 class="text-lg font-bold text-emerald-800 mb-2 border-b pb-2">
+                    <i class="fa-solid fa-brain"></i> ข้อมูลจิตบำบัด (Psychotherapy)
+                </h3>
+                <div class="chart-container">
+                    <canvas id="chartPsych"></canvas>
+                </div>
+                <div class="mt-4">
+                    <h4 class="text-sm font-semibold text-gray-500">ตารางข้อมูลจิตบำบัด</h4>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs" id="tablePsych"></table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. Home Ward Stats -->
+            <div class="card p-4 col-span-1 md:col-span-1">
+                <h3 class="text-lg font-bold text-emerald-800 mb-2 border-b pb-2">
+                    <i class="fa-solid fa-house-medical"></i> ข้อมูล Home Ward (HW)
+                </h3>
+                <div class="chart-container">
+                    <canvas id="chartHW"></canvas>
+                </div>
+                <div class="mt-4">
+                    <h4 class="text-sm font-semibold text-gray-500">ตารางข้อมูล Home Ward</h4>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs" id="tableHW"></table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 5. Detox & IMC Cases -->
+            <div class="card p-4 col-span-1 md:col-span-1">
+                <h3 class="text-lg font-bold text-emerald-800 mb-2 border-b pb-2">
+                    <i class="fa-solid fa-pills"></i> จำนวนเคส Detox & IMC
+                </h3>
+                <div class="chart-container">
+                    <canvas id="chartDetoxIMCCase"></canvas>
+                </div>
+                <div class="mt-4">
+                    <h4 class="text-sm font-semibold text-gray-500">ตารางข้อมูลเคส Detox & IMC</h4>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs" id="tableDetoxIMCCase"></table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 6. Detox & IMC Revenue Trend -->
+            <div class="card p-4 col-span-1 md:col-span-1">
+                <h3 class="text-lg font-bold text-emerald-800 mb-2 border-b pb-2">
+                    <i class="fa-solid fa-chart-line"></i> แนวโน้มยอดชดเชย Detox & IMC
+                </h3>
+                <div class="chart-container">
+                    <canvas id="chartDetoxIMCRev"></canvas>
+                </div>
+                <div class="mt-4">
+                    <h4 class="text-sm font-semibold text-gray-500">ตารางข้อมูลยอดชดเชย (Revenue)</h4>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs" id="tableDetoxIMCRev"></table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Raw Data Locked Placeholder -->
+        <div id="rawDataLocked" class="card p-6 text-center py-10">
+            <i class="fa-solid fa-lock text-5xl mb-4 text-gray-300"></i>
+            <h3 class="text-xl font-bold text-emerald-800 mb-2">ตารางข้อมูลดิบ (Raw Data)</h3>
+            <p class="text-gray-500">สงวนสิทธิ์เฉพาะผู้ดูแลระบบ กรุณา <button onclick="toggleLoginModal()" class="text-emerald-600 font-bold underline hover:text-emerald-800">เข้าสู่ระบบ</button> เพื่อดูข้อมูล</p>
+        </div>
+
+        <!-- Raw Data Table (Searchable) -->
+        <div id="rawDataCard" class="card p-6 hidden">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-emerald-800"><i class="fa-solid fa-table"></i> ตารางข้อมูลดิบ (Raw Data)</h3>
+                <div class="admin-controls">
+                    <button onclick="exportCSV()" class="text-gray-500 hover:text-gray-700 text-sm border px-3 py-1 rounded">
+                        <i class="fa-solid fa-download"></i> Export CSV
+                    </button>
+                </div>
+            </div>
+            <div class="table-container max-h-96 overflow-y-auto">
+                <table id="mainDataTable">
+                    <thead>
+                        <tr>
+                            <th class="admin-controls">Action</th>
+                            <th>เดือน/ปี</th>
+                            <th>เคสจิตบำบัด</th>
+                            <th>ชดเชยจิตบำบัด</th>
+                            <th>เคส Detox</th>
+                            <th>ชดเชย Detox</th>
+                            <th>เคส IMC</th>
+                            <th>ชดเชย IMC</th>
+                            <th>เคส HW</th>
+                            <th>ชดเชย HW</th>
+                            <th>รายได้รวม</th>
+                            <th>รายจ่ายรวม</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dataTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-lg shadow-xl w-96">
+            <h2 class="text-2xl font-bold mb-4 text-emerald-700 text-center">เข้าสู่ระบบผู้ดูแล</h2>
+            <input type="text" id="username" placeholder="Username" class="w-full border p-2 mb-3 rounded focus:outline-emerald-500">
+            <input type="password" id="password" placeholder="Password" class="w-full border p-2 mb-4 rounded focus:outline-emerald-500">
+            <div class="flex justify-between">
+                <button onclick="toggleLoginModal()" class="text-gray-500 hover:text-gray-700">ยกเลิก</button>
+                <button onclick="login()" class="bg-emerald-600 text-white px-4 py-2 rounded hover:bg-emerald-700 font-bold">Log In</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+            <h2 class="text-xl font-bold mb-4 text-emerald-700 flex items-center">
+                <i class="fa-solid fa-gear mr-2"></i> ตั้งค่าการเชื่อมต่อ
+            </h2>
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">ลิงก์ CSV จาก Google Sheet (Published to Web)</label>
+                <input type="text" id="sheetUrlInput" class="w-full border p-2 rounded focus:outline-emerald-500 text-sm" placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv">
+                <p class="text-xs text-gray-500 mt-2">
+                    <i class="fa-solid fa-circle-info"></i> วิธีหาลิงก์: ไฟล์ > แชร์ > เผยแพร่ทางเว็บ > เลือก "ค่าที่คั่นด้วยเครื่องหมายจุลภาค (.csv)"
+                </p>
+            </div>
+            <div class="flex justify-end space-x-2">
+                <button onclick="closeSettingsModal()" class="text-gray-500 hover:text-gray-700 px-3 py-1 rounded">ปิด</button>
+                <button onclick="saveSettings()" class="bg-emerald-600 text-white px-4 py-2 rounded hover:bg-emerald-700 font-bold">บันทึก</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Data Modal -->
+    <div id="dataModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50 overflow-y-auto">
+        <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-lg my-10">
+            <h2 class="text-xl font-bold mb-4 text-emerald-700" id="modalTitle">เพิ่มข้อมูล</h2>
+            <form id="dataForm" class="grid grid-cols-2 gap-3 text-sm">
+                <div class="col-span-2">
+                    <label class="block mb-1">เดือน/ปี (เช่น ต.ค. 68)</label>
+                    <input type="text" id="inpMonth" class="w-full border p-2 rounded" required placeholder="ต.ค. 68">
+                </div>
+                <div><label>เคส จิตบำบัด</label><input type="number" id="inpPsychCase" class="w-full border p-2 rounded"></div>
+                <div><label>ชดเชย จิตบำบัด</label><input type="number" id="inpPsychComp" class="w-full border p-2 rounded"></div>
+                <div><label>เคส Detox</label><input type="number" id="inpDetoxCase" class="w-full border p-2 rounded"></div>
+                <div><label>ชดเชย Detox</label><input type="number" id="inpDetoxComp" class="w-full border p-2 rounded"></div>
+                <div><label>เคส IMC</label><input type="number" id="inpImcCase" class="w-full border p-2 rounded"></div>
+                <div><label>ชดเชย IMC</label><input type="number" id="inpImcComp" class="w-full border p-2 rounded"></div>
+                <div><label>รายได้รวม</label><input type="number" id="inpIncome" class="w-full border p-2 rounded"></div>
+                <div><label>รายจ่ายรวม</label><input type="number" id="inpExpense" class="w-full border p-2 rounded"></div>
+                <div><label>เคส HW</label><input type="number" id="inpHWCase" class="w-full border p-2 rounded"></div>
+                <div><label>ชดเชย HW</label><input type="number" id="inpHWComp" class="w-full border p-2 rounded"></div>
+                <div class="col-span-2 flex justify-end space-x-2 mt-4">
+                    <button type="button" onclick="closeDataModal()" class="bg-gray-300 px-4 py-2 rounded hover:bg-gray-400">ยกเลิก</button>
+                    <button type="button" onclick="saveData()" class="bg-emerald-600 text-white px-4 py-2 rounded hover:bg-emerald-700">บันทึก</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // --- Global Variables ---
+        const initialData = [
+            { month: "ต.ค. 68", psych_case: 342, psych_comp: 141000, detox_case: 9, detox_comp: 132348.4, imc_case: 6, imc_comp: 102254.21, income: 375602.61, expense: 92780, hw_case: 6, hw_comp: 92219.09 },
+            { month: "พ.ย. 68", psych_case: 311, psych_comp: 87000, detox_case: 33, detox_comp: 464291.84, imc_case: 10, imc_comp: 149601.78, income: 700893.62, expense: 106955, hw_case: 3, hw_comp: 42349.53 },
+        ];
+
+        let globalData = [...initialData];
+        let isAdmin = false;
+        let chartInstances = {};
+        let editingIndex = -1;
+
+        Chart.register(ChartDataLabels);
+
+        const monthThMap = {
+            "ม.ค.": 1, "ก.พ.": 2, "มี.ค.": 3, "เม.ย.": 4, "พ.ค.": 5, "มิ.ย.": 6,
+            "ก.ค.": 7, "ส.ค.": 8, "ก.ย.": 9, "ต.ค.": 10, "พ.ย.": 11, "ธ.ค.": 12
+        };
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedData = localStorage.getItem('hospitalDashboardData');
+            if (savedData) {
+                globalData = JSON.parse(savedData);
+            }
+            // Load saved Sheet URL
+            const savedUrl = localStorage.getItem('googleSheetUrl');
+            if(savedUrl) {
+                document.getElementById('sheetUrlInput').value = savedUrl;
+            }
+            renderDashboard();
+        });
+
+        // --- Data Handling & Sorting ---
+        function parseThaiDateScore(monthStr) {
+            if (!monthStr) return 0;
+            let str = monthStr.trim();
+            let monthNum = 0;
+            let yearNum = 0;
+            for (const [key, val] of Object.entries(monthThMap)) {
+                if (str.startsWith(key)) {
+                    monthNum = val;
+                    let yearPart = str.replace(key, '').replace(/[^0-9]/g, '');
+                    if (yearPart) yearNum = parseInt(yearPart);
+                    break;
+                }
+            }
+            if (monthNum === 0) return 0;
+            return (yearNum * 100) + monthNum;
+        }
+
+        function sortDataByFiscalYear(data) {
+            return data.sort((a, b) => parseThaiDateScore(a.month) - parseThaiDateScore(b.month));
+        }
+
+        function parseCurrency(val) {
+            if (typeof val === 'string') {
+                return parseFloat(val.replace(/,/g, '')) || 0;
+            }
+            return val || 0;
+        }
+
+        function formatCurrency(val) {
+            return new Intl.NumberFormat('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
+        }
+
+        function formatLabel(val) {
+             if (val >= 1000000) return (val / 1000000).toFixed(1) + 'M';
+             if (val >= 1000) return (val / 1000).toFixed(1) + 'k';
+             return val;
+        }
+
+        // --- Chart Rendering ---
+        function renderDashboard() {
+            let sortedData = sortDataByFiscalYear([...globalData]);
+            
+            const filterVal = document.getElementById('monthFilter').value;
+            if (filterVal !== 'all') {
+                sortedData = sortedData.filter(d => d.month === filterVal);
+            }
+
+            const filterSelect = document.getElementById('monthFilter');
+            const uniqueMonths = [...new Set(globalData.map(d => d.month))].sort((a,b) => parseThaiDateScore(a) - parseThaiDateScore(b));
+            filterSelect.innerHTML = '<option value="all">ทุกเดือน (ตามปีงบประมาณ)</option>';
+            uniqueMonths.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m;
+                opt.text = m;
+                if(m === filterVal) opt.selected = true;
+                filterSelect.appendChild(opt);
+            });
+
+            const labels = sortedData.map(d => d.month);
+            const incomes = sortedData.map(d => parseCurrency(d.income));
+            const expenses = sortedData.map(d => parseCurrency(d.expense));
+            
+            const psychCases = sortedData.map(d => parseCurrency(d.psych_case));
+            const psychComps = sortedData.map(d => parseCurrency(d.psych_comp));
+            
+            const hwCases = sortedData.map(d => parseCurrency(d.hw_case));
+            const hwComps = sortedData.map(d => parseCurrency(d.hw_comp));
+
+            const detoxCases = sortedData.map(d => parseCurrency(d.detox_case));
+            const detoxComps = sortedData.map(d => parseCurrency(d.detox_comp));
+            const imcCases = sortedData.map(d => parseCurrency(d.imc_case));
+            const imcComps = sortedData.map(d => parseCurrency(d.imc_comp));
+
+            // Summary Cards
+            const totalInc = incomes.reduce((a, b) => a + b, 0);
+            const totalExp = expenses.reduce((a, b) => a + b, 0);
+            const totalBal = totalInc - totalExp;
+
+            document.getElementById('cardTotalIncome').innerText = formatCurrency(totalInc);
+            document.getElementById('cardTotalExpense').innerText = formatCurrency(totalExp);
+            document.getElementById('cardTotalBalance').innerText = formatCurrency(totalBal);
+            if(totalBal < 0) document.getElementById('cardTotalBalance').classList.add('text-yellow-200');
+            else document.getElementById('cardTotalBalance').classList.remove('text-yellow-200');
+
+            document.getElementById('sumIncome').innerText = formatCurrency(totalInc);
+            document.getElementById('sumExpense').innerText = formatCurrency(totalExp);
+
+            Object.values(chartInstances).forEach(chart => chart.destroy());
+
+            // --- Chart Options ---
+            const verticalBarOpts = {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'top' },
+                    datalabels: {
+                        color: 'white',
+                        anchor: 'end',
+                        align: 'start',
+                        font: { weight: 'bold', size: 10 },
+                        formatter: (val) => val > 0 ? formatLabel(val) : ''
+                    }
+                }
+            };
+
+            // 1. Finance
+            chartInstances['finance'] = new Chart(document.getElementById('chartFinance'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'รายได้รวม', data: incomes, backgroundColor: '#34d399', borderRadius: 4, barPercentage: 0.7 },
+                        { label: 'รายจ่ายรวม', data: expenses, backgroundColor: '#f87171', borderRadius: 4, barPercentage: 0.7 }
+                    ]
+                },
+                options: verticalBarOpts
+            });
+
+            // 2. Ratio
+            chartInstances['ratio'] = new Chart(document.getElementById('chartRatio'), {
+                type: 'bar',
+                data: {
+                    labels: ['รายได้', 'รายจ่าย'],
+                    datasets: [{
+                        label: 'จำนวนเงิน (บาท)',
+                        data: [totalInc, totalExp],
+                        backgroundColor: ['#10b981', '#ef4444'],
+                        borderRadius: 5,
+                        barPercentage: 0.6
+                    }]
+                },
+                options: {
+                    indexAxis: 'y', // Horizontal
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        datalabels: {
+                            color: 'white',
+                            anchor: 'end',
+                            align: 'start',
+                            font: { weight: 'bold', size: 12 },
+                            formatter: (value, ctx) => {
+                                let sum = totalInc + totalExp;
+                                let percentage = sum > 0 ? (value * 100 / sum).toFixed(1) + "%" : "0%";
+                                return formatLabel(value) + ' (' + percentage + ')';
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { callback: (value) => formatLabel(value) }
+                        }
+                    }
+                }
+            });
+
+            // 3. Psychotherapy
+            chartInstances['psych'] = new Chart(document.getElementById('chartPsych'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { 
+                            label: 'รายได้ที่คาดว่าจะได้รับ (บาท)', data: psychComps, type: 'bar', yAxisID: 'y1', 
+                            backgroundColor: '#A5B4FC', borderRadius: 4, order: 2,
+                            datalabels: { color: 'white', anchor: 'end', align: 'start', formatter: formatLabel } 
+                        },
+                        { 
+                            label: 'จำนวนเคส', data: psychCases, type: 'line', yAxisID: 'y', 
+                            backgroundColor: '#F97316', borderColor: '#F97316', borderWidth: 3, fill: false, tension: 0.4, order: 1,
+                            datalabels: { color: '#F97316', backgroundColor:'white', borderRadius:4, anchor: 'top', align: 'top' } 
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: {
+                        y: { display: false, title: {display:true, text:'เคส'} },
+                        y1: { display: false, grid: { drawOnChartArea: false }, title: {display:true, text:'บาท'} }
+                    },
+                    plugins: {
+                        datalabels: { font: { weight: 'bold' } }
+                    }
+                }
+            });
+            generateTable('tablePsych', sortedData, ['month', 'psych_case', 'psych_comp'], ['เดือน', 'เคส', 'รายได้ที่คาดว่าจะได้รับ']);
+
+            // 4. HW
+            chartInstances['hw'] = new Chart(document.getElementById('chartHW'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { 
+                            label: 'ชดเชย HW', data: hwComps, type: 'bar', yAxisID: 'y1',
+                            backgroundColor: '#6EE7B7', borderRadius: 4, order: 2,
+                            datalabels: { color: 'white', anchor: 'end', align: 'start', formatter: formatLabel }
+                        },
+                        { 
+                            label: 'เคส HW', data: hwCases, type: 'line', yAxisID: 'y',
+                            backgroundColor: '#EC4899', borderColor: '#EC4899', borderWidth: 3, fill: false, tension: 0.4, order: 1,
+                            datalabels: { color: '#EC4899', backgroundColor:'white', borderRadius:4, anchor: 'top', align: 'top' }
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: {
+                        y: { display: false },
+                        y1: { display: false, grid: { drawOnChartArea: false } }
+                    },
+                    plugins: {
+                        datalabels: { font: { weight: 'bold' } }
+                    }
+                }
+            });
+            generateTable('tableHW', sortedData, ['month', 'hw_case', 'hw_comp'], ['เดือน', 'เคส', 'ชดเชย']);
+
+            // 5. Detox & IMC Cases
+            chartInstances['detoxCase'] = new Chart(document.getElementById('chartDetoxIMCCase'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { 
+                            label: 'เคส Detox', data: detoxCases, backgroundColor: '#8b5cf6', borderRadius: 4,
+                            datalabels: { color: 'white', anchor: 'end', align: 'start' }
+                        },
+                        { 
+                            label: 'เคส IMC', data: imcCases, backgroundColor: '#ec4899', borderRadius: 4,
+                            datalabels: { color: 'white', anchor: 'end', align: 'start' }
+                        }
+                    ]
+                },
+                options: verticalBarOpts
+            });
+            generateTable('tableDetoxIMCCase', sortedData, ['month', 'detox_case', 'imc_case'], ['เดือน', 'เคส Detox', 'เคส IMC']);
+
+            // 6. Detox & IMC Revenue Trend
+            chartInstances['detoxRev'] = new Chart(document.getElementById('chartDetoxIMCRev'), {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { 
+                            label: 'ชดเชย Detox', data: detoxComps, borderColor: '#7c3aed', backgroundColor: '#7c3aed', tension: 0.4, fill: false,
+                            datalabels: { align: 'top', color: '#7c3aed', backgroundColor: '#f3e8ff', borderRadius: 4 }
+                        },
+                        { 
+                            label: 'ชดเชย IMC', data: imcComps, borderColor: '#be185d', backgroundColor: '#be185d', tension: 0.4, fill: false,
+                            datalabels: { align: 'bottom', color: '#be185d', backgroundColor: '#fce7f3', borderRadius: 4 }
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top' },
+                        datalabels: {
+                            font: { size: 10, weight: 'bold' },
+                            formatter: formatLabel
+                        }
+                    }
+                }
+            });
+            generateTable('tableDetoxIMCRev', sortedData, ['month', 'detox_comp', 'imc_comp'], ['เดือน', 'Detox (บาท)', 'IMC (บาท)']);
+
+            renderMainTable(sortedData);
+        }
+
+        // --- Table Generators ---
+        function generateTable(tableId, data, keys, headers) {
+            const table = document.getElementById(tableId);
+            let html = `<thead><tr class="bg-gray-100">`;
+            headers.forEach(h => html += `<th class="px-2 py-1">${h}</th>`);
+            html += `</tr></thead><tbody>`;
+            let totals = keys.map(() => 0);
+            data.forEach(row => {
+                html += `<tr>`;
+                keys.forEach((k, idx) => {
+                    let val = row[k];
+                    if (k !== 'month') {
+                        let num = parseCurrency(val);
+                        totals[idx] += num;
+                        val = formatCurrency(num);
+                    }
+                    html += `<td class="border px-2 py-1">${val}</td>`;
+                });
+                html += `</tr>`;
+            });
+            html += `<tr class="font-bold bg-emerald-100"><td class="border px-2 py-1">รวม</td>`;
+            for(let i=1; i<keys.length; i++) {
+                html += `<td class="border px-2 py-1">${formatCurrency(totals[i])}</td>`;
+            }
+            html += `</tr></tbody>`;
+            table.innerHTML = html;
+        }
+
+        function renderMainTable(data) {
+            const tbody = document.getElementById('dataTableBody');
+            tbody.innerHTML = '';
+
+            let totals = {
+                psych_case: 0, psych_comp: 0,
+                detox_case: 0, detox_comp: 0,
+                imc_case: 0, imc_comp: 0,
+                income: 0, expense: 0,
+                hw_case: 0, hw_comp: 0
+            };
+
+            data.forEach((row) => {
+                // Accumulate totals
+                totals.psych_case += parseCurrency(row.psych_case);
+                totals.psych_comp += parseCurrency(row.psych_comp);
+                totals.detox_case += parseCurrency(row.detox_case);
+                totals.detox_comp += parseCurrency(row.detox_comp);
+                totals.imc_case += parseCurrency(row.imc_case);
+                totals.imc_comp += parseCurrency(row.imc_comp);
+                totals.income += parseCurrency(row.income);
+                totals.expense += parseCurrency(row.expense);
+                totals.hw_case += parseCurrency(row.hw_case);
+                totals.hw_comp += parseCurrency(row.hw_comp);
+
+                const globalIndex = globalData.indexOf(row);
+                let tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="admin-controls text-center">
+                        <button onclick="editRow(${globalIndex})" class="text-blue-500 hover:text-blue-700 mx-1" title="แก้ไข"><i class="fa-solid fa-pen-to-square"></i></button>
+                        <button onclick="deleteRow(${globalIndex})" class="text-red-500 hover:text-red-700 mx-1" title="ลบ"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                    <td>${row.month}</td>
+                    <td>${row.psych_case}</td>
+                    <td>${formatCurrency(row.psych_comp)}</td>
+                    <td>${row.detox_case}</td>
+                    <td>${formatCurrency(row.detox_comp)}</td>
+                    <td>${row.imc_case}</td>
+                    <td>${formatCurrency(row.imc_comp)}</td>
+                    <td>${row.hw_case}</td>
+                    <td>${formatCurrency(row.hw_comp)}</td>
+                    <td class="text-green-600 font-bold">${formatCurrency(row.income)}</td>
+                    <td class="text-red-500 font-bold">${formatCurrency(row.expense)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // Append Total Row
+            let totalTr = document.createElement('tr');
+            totalTr.className = "bg-emerald-100 font-bold border-t-2 border-emerald-200";
+            totalTr.innerHTML = `
+                <td class="admin-controls p-2"></td>
+                <td class="p-2 text-center">รวม</td>
+                <td class="p-2 text-center">${totals.psych_case}</td>
+                <td class="p-2 text-center">${formatCurrency(totals.psych_comp)}</td>
+                <td class="p-2 text-center">${totals.detox_case}</td>
+                <td class="p-2 text-center">${formatCurrency(totals.detox_comp)}</td>
+                <td class="p-2 text-center">${totals.imc_case}</td>
+                <td class="p-2 text-center">${formatCurrency(totals.imc_comp)}</td>
+                <td class="p-2 text-center">${totals.hw_case}</td>
+                <td class="p-2 text-center">${formatCurrency(totals.hw_comp)}</td>
+                <td class="p-2 text-center text-green-700">${formatCurrency(totals.income)}</td>
+                <td class="p-2 text-center text-red-600">${formatCurrency(totals.expense)}</td>
+            `;
+            tbody.appendChild(totalTr);
+
+            updateAdminView();
+        }
+
+        // --- Auth & CRUD & Settings ---
+        function toggleLoginModal() { document.getElementById('loginModal').classList.toggle('hidden'); }
+        
+        // Settings Logic
+        function openSettingsModal() { document.getElementById('settingsModal').classList.remove('hidden'); }
+        function closeSettingsModal() { document.getElementById('settingsModal').classList.add('hidden'); }
+        function saveSettings() {
+            const url = document.getElementById('sheetUrlInput').value;
+            if(url) {
+                localStorage.setItem('googleSheetUrl', url);
+                Swal.fire({icon: 'success', title: 'บันทึกเรียบร้อย', showConfirmButton: false, timer: 1000});
+                closeSettingsModal();
+            } else {
+                Swal.fire('แจ้งเตือน', 'กรุณาระบุ URL', 'warning');
+            }
+        }
+
+        function login() {
+            const u = document.getElementById('username').value;
+            const p = document.getElementById('password').value;
+            if (u === 'admin' && p === '1234') {
+                isAdmin = true;
+                localStorage.setItem('hospitalDashboardAdmin', 'true');
+                Swal.fire({ icon: 'success', title: 'ยินดีต้อนรับ Admin', timer: 1500, showConfirmButton: false });
+                toggleLoginModal();
+                updateAdminView();
+            } else { Swal.fire({ icon: 'error', title: 'Login Failed', text: 'Username or Password incorrect' }); }
+        }
+        function logout() { isAdmin = false; localStorage.removeItem('hospitalDashboardAdmin'); updateAdminView(); Swal.fire({ icon: 'success', title: 'Logged Out', timer: 1500, showConfirmButton: false }); }
+        
+        function updateAdminView() {
+            const adminControls = document.querySelectorAll('.admin-controls');
+            if (isAdmin) {
+                adminControls.forEach(el => el.style.display = 'table-cell');
+                document.getElementById('admin-actions').style.display = 'flex';
+                document.getElementById('login-btn').classList.add('hidden');
+                document.getElementById('logout-btn').classList.remove('hidden');
+                document.getElementById('admin-status').classList.remove('hidden');
+                
+                document.getElementById('rawDataCard').classList.remove('hidden');
+                document.getElementById('rawDataLocked').classList.add('hidden');
+            } else {
+                adminControls.forEach(el => el.style.display = 'none');
+                document.getElementById('admin-actions').style.display = 'none';
+                document.getElementById('login-btn').classList.remove('hidden');
+                document.getElementById('logout-btn').classList.add('hidden');
+                document.getElementById('admin-status').classList.add('hidden');
+                
+                document.getElementById('rawDataCard').classList.add('hidden');
+                document.getElementById('rawDataLocked').classList.remove('hidden');
+            }
+        }
+
+        function openAddModal() { editingIndex = -1; document.getElementById('dataForm').reset(); document.getElementById('modalTitle').innerText = "เพิ่มข้อมูล"; document.getElementById('dataModal').classList.remove('hidden'); }
+        function closeDataModal() { document.getElementById('dataModal').classList.add('hidden'); }
+        
+        function editRow(index) {
+            editingIndex = index;
+            const d = globalData[index];
+            document.getElementById('inpMonth').value = d.month;
+            document.getElementById('inpPsychCase').value = d.psych_case;
+            document.getElementById('inpPsychComp').value = parseCurrency(d.psych_comp);
+            document.getElementById('inpDetoxCase').value = d.detox_case;
+            document.getElementById('inpDetoxComp').value = parseCurrency(d.detox_comp);
+            document.getElementById('inpImcCase').value = d.imc_case;
+            document.getElementById('inpImcComp').value = parseCurrency(d.imc_comp);
+            document.getElementById('inpIncome').value = parseCurrency(d.income);
+            document.getElementById('inpExpense').value = parseCurrency(d.expense);
+            document.getElementById('inpHWCase').value = d.hw_case;
+            document.getElementById('inpHWComp').value = parseCurrency(d.hw_comp);
+            document.getElementById('modalTitle').innerText = "แก้ไขข้อมูล";
+            document.getElementById('dataModal').classList.remove('hidden');
+        }
+
+        function deleteRow(index) {
+            Swal.fire({ title: 'ยืนยันการลบ?', text: "ข้อมูลนี้จะหายไป", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'ลบข้อมูล' })
+            .then((result) => {
+                if (result.isConfirmed) {
+                    globalData.splice(index, 1);
+                    localStorage.setItem('hospitalDashboardData', JSON.stringify(globalData));
+                    renderDashboard();
+                    Swal.fire('Deleted!', 'ลบข้อมูลแล้ว', 'success');
+                }
+            });
+        }
+
+        function saveData() {
+            const newData = {
+                month: document.getElementById('inpMonth').value,
+                psych_case: Number(document.getElementById('inpPsychCase').value),
+                psych_comp: Number(document.getElementById('inpPsychComp').value),
+                detox_case: Number(document.getElementById('inpDetoxCase').value),
+                detox_comp: Number(document.getElementById('inpDetoxComp').value),
+                imc_case: Number(document.getElementById('inpImcCase').value),
+                imc_comp: Number(document.getElementById('inpImcComp').value),
+                income: Number(document.getElementById('inpIncome').value),
+                expense: Number(document.getElementById('inpExpense').value),
+                hw_case: Number(document.getElementById('inpHWCase').value),
+                hw_comp: Number(document.getElementById('inpHWComp').value),
+            };
+            if (editingIndex === -1) globalData.push(newData);
+            else globalData[editingIndex] = newData;
+            localStorage.setItem('hospitalDashboardData', JSON.stringify(globalData));
+            closeDataModal();
+            renderDashboard();
+            Swal.fire({ icon: 'success', title: 'บันทึกเรียบร้อย', timer: 1500 });
+        }
+
+        // --- Fetch Data ---
+        function fetchGoogleSheet() {
+            const url = localStorage.getItem('googleSheetUrl');
+            
+            if (!url) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'ยังไม่ได้ตั้งค่า',
+                    text: 'กรุณากดปุ่มฟันเฟือง (ตั้งค่า) เพื่อใส่ลิงก์ Google Sheet CSV ของคุณก่อน',
+                    confirmButtonText: 'ไปตั้งค่า'
+                }).then((result) => {
+                    if(result.isConfirmed) openSettingsModal();
+                });
+                return;
+            }
+
+            Swal.fire({ title: 'กำลังดึงข้อมูล...', didOpen: () => { Swal.showLoading() } });
+            Papa.parse(url, {
+                download: true, header: true,
+                complete: function(results) { 
+                    if(results.data && results.data.length > 0) {
+                        processParsedData(results.data); 
+                        Swal.fire('สำเร็จ', 'ดึงข้อมูลเรียบร้อย', 'success'); 
+                    } else {
+                        Swal.fire('ผิดพลาด', 'ไม่พบข้อมูลในไฟล์ หรือรูปแบบไม่ถูกต้อง', 'error');
+                    }
+                },
+                error: function(err) { 
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'เชื่อมต่อล้มเหลว',
+                        text: 'ตรวจสอบลิงก์ หรือสิทธิ์การเข้าถึง (Publish to Web)',
+                        footer: 'ต้องเป็นลิงก์ .csv เท่านั้น'
+                    });
+                }
+            });
+        }
+        
+        function handleFileUpload(input) {
+            const file = input.files[0];
+            if (!file) return;
+            Papa.parse(file, { header: true, complete: function(results) { processParsedData(results.data); Swal.fire('สำเร็จ', 'นำเข้าข้อมูลเรียบร้อย', 'success'); } });
+        }
+        
+        function processParsedData(rawData) {
+            const mappedData = rawData.filter(row => row['เดือน /ปี'] || row['เดือน/ปี']).map(row => ({
+                month: row['เดือน /ปี'] || row['เดือน/ปี'] || '',
+                psych_case: row['จำนวนเคสจิตบำบัด'] || 0,
+                psych_comp: row['ชดเชยจิตบำบัด'] || 0,
+                detox_case: row['จำนวนเคส Detox'] || row['จำนวนเคส Detox '] || 0,
+                detox_comp: row['ชดเชย Detox'] || row['ชดเชย Detox '] || 0,
+                imc_case: row['จำนวนเคส IMC'] || row['จำนวนเคส IMC '] || 0,
+                imc_comp: row[' ชดเชย IMC '] || row['ชดเชย IMC'] || 0,
+                income: row['รายได้รวม'] || 0,
+                expense: row['รายจ่ายรวม'] || 0,
+                hw_case: row['จำนวนเคส HW'] || 0,
+                hw_comp: row['ชดเชย HW'] || 0
+            }));
+            if(mappedData.length > 0) { globalData = mappedData; localStorage.setItem('hospitalDashboardData', JSON.stringify(globalData)); renderDashboard(); }
+        }
+        function exportCSV() {
+            const csvRows = [];
+            csvRows.push(['เดือน /ปี','จำนวนเคสจิตบำบัด','ชดเชยจิตบำบัด','จำนวนเคส Detox','ชดเชย Detox','จำนวนเคส IMC','ชดเชย IMC','จำนวนเคส HW','ชดเชย HW','รายได้รวม','รายจ่ายรวม']);
+            globalData.forEach(row => { csvRows.push([row.month, row.psych_case, row.psych_comp, row.detox_case, row.detox_comp, row.imc_case, row.imc_comp, row.hw_case, row.hw_comp, row.income, row.expense]); });
+            let csvContent = "data:text/csv;charset=utf-8," + csvRows.map(e => e.join(",")).join("\n");
+            var encodedUri = encodeURI(csvContent);
+            var link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "mental_health_data_updated.csv");
+            document.body.appendChild(link);
+            link.click();
+        }
+        function refreshData() {
+            renderDashboard();
+            const btn = document.querySelector('.fa-rotate');
+            btn.classList.add('fa-spin');
+            setTimeout(() => btn.classList.remove('fa-spin'), 1000);
+        }
+    </script>
+</body>
+</html>
