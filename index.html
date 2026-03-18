@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="th">
 <head>
@@ -132,7 +133,7 @@
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 mb-8">
             
             <!-- 1. Financial Trends (Vertical Bar) -->
-            <div class="card p-4 col-span-1 md:col-span-1">
+            <div class="card p-4 col-span-1 md:col-span-2 lg:col-span-2">
                 <h3 class="text-lg font-bold text-emerald-800 mb-2 border-b pb-2">
                     <i class="fa-solid fa-money-bill-trend-up"></i> แนวโน้มการเงิน (รายรับ vs รายจ่าย)
                 </h3>
@@ -174,22 +175,6 @@
                     <h4 class="text-sm font-semibold text-gray-500">ตารางข้อมูลจิตบำบัด</h4>
                     <div class="overflow-x-auto">
                         <table class="w-full text-xs" id="tablePsych"></table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 4. Home Ward Stats -->
-            <div class="card p-4 col-span-1 md:col-span-1">
-                <h3 class="text-lg font-bold text-emerald-800 mb-2 border-b pb-2">
-                    <i class="fa-solid fa-house-medical"></i> ข้อมูล Home Ward (HW)
-                </h3>
-                <div class="chart-container">
-                    <canvas id="chartHW"></canvas>
-                </div>
-                <div class="mt-4">
-                    <h4 class="text-sm font-semibold text-gray-500">ตารางข้อมูล Home Ward</h4>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-xs" id="tableHW"></table>
                     </div>
                 </div>
             </div>
@@ -257,8 +242,6 @@
                             <th>ชดเชย Detox</th>
                             <th>เคส IMC</th>
                             <th>ชดเชย IMC</th>
-                            <th>เคส HW</th>
-                            <th>ชดเชย HW</th>
                             <th>รายได้รวม</th>
                             <th>รายจ่ายรวม</th>
                         </tr>
@@ -320,8 +303,6 @@
                 <div><label>ชดเชย IMC</label><input type="number" id="inpImcComp" class="w-full border p-2 rounded"></div>
                 <div><label>รายได้รวม</label><input type="number" id="inpIncome" class="w-full border p-2 rounded"></div>
                 <div><label>รายจ่ายรวม</label><input type="number" id="inpExpense" class="w-full border p-2 rounded"></div>
-                <div><label>เคส HW</label><input type="number" id="inpHWCase" class="w-full border p-2 rounded"></div>
-                <div><label>ชดเชย HW</label><input type="number" id="inpHWComp" class="w-full border p-2 rounded"></div>
                 <div class="col-span-2 flex justify-end space-x-2 mt-4">
                     <button type="button" onclick="closeDataModal()" class="bg-gray-300 px-4 py-2 rounded hover:bg-gray-400">ยกเลิก</button>
                     <button type="button" onclick="saveData()" class="bg-emerald-600 text-white px-4 py-2 rounded hover:bg-emerald-700">บันทึก</button>
@@ -334,8 +315,8 @@
     <script>
         // --- Global Variables ---
         const initialData = [
-            { month: "ต.ค. 68", psych_case: 342, psych_comp: 141000, detox_case: 9, detox_comp: 132348.4, imc_case: 6, imc_comp: 102254.21, income: 375602.61, expense: 92780, hw_case: 6, hw_comp: 92219.09 },
-            { month: "พ.ย. 68", psych_case: 311, psych_comp: 87000, detox_case: 33, detox_comp: 464291.84, imc_case: 10, imc_comp: 149601.78, income: 700893.62, expense: 106955, hw_case: 3, hw_comp: 42349.53 },
+            { month: "ต.ค. 68", psych_case: 342, psych_comp: 141000, detox_case: 9, detox_comp: 132348.4, imc_case: 6, imc_comp: 102254.21, income: 375602.61, expense: 92780 },
+            { month: "พ.ย. 68", psych_case: 311, psych_comp: 87000, detox_case: 33, detox_comp: 464291.84, imc_case: 10, imc_comp: 149601.78, income: 700893.62, expense: 106955 },
         ];
 
         let globalData = [...initialData];
@@ -429,9 +410,6 @@
             
             const psychCases = sortedData.map(d => parseCurrency(d.psych_case));
             const psychComps = sortedData.map(d => parseCurrency(d.psych_comp));
-            
-            const hwCases = sortedData.map(d => parseCurrency(d.hw_case));
-            const hwComps = sortedData.map(d => parseCurrency(d.hw_comp));
 
             const detoxCases = sortedData.map(d => parseCurrency(d.detox_case));
             const detoxComps = sortedData.map(d => parseCurrency(d.detox_comp));
@@ -553,37 +531,6 @@
             });
             generateTable('tablePsych', sortedData, ['month', 'psych_case', 'psych_comp'], ['เดือน', 'เคส', 'รายได้ที่คาดว่าจะได้รับ']);
 
-            // 4. HW
-            chartInstances['hw'] = new Chart(document.getElementById('chartHW'), {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        { 
-                            label: 'ชดเชย HW', data: hwComps, type: 'bar', yAxisID: 'y1',
-                            backgroundColor: '#6EE7B7', borderRadius: 4, order: 2,
-                            datalabels: { color: 'white', anchor: 'end', align: 'start', formatter: formatLabel }
-                        },
-                        { 
-                            label: 'เคส HW', data: hwCases, type: 'line', yAxisID: 'y',
-                            backgroundColor: '#EC4899', borderColor: '#EC4899', borderWidth: 3, fill: false, tension: 0.4, order: 1,
-                            datalabels: { color: '#EC4899', backgroundColor:'white', borderRadius:4, anchor: 'top', align: 'top' }
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true, maintainAspectRatio: false,
-                    scales: {
-                        y: { display: false },
-                        y1: { display: false, grid: { drawOnChartArea: false } }
-                    },
-                    plugins: {
-                        datalabels: { font: { weight: 'bold' } }
-                    }
-                }
-            });
-            generateTable('tableHW', sortedData, ['month', 'hw_case', 'hw_comp'], ['เดือน', 'เคส', 'ชดเชย']);
-
             // 5. Detox & IMC Cases
             chartInstances['detoxCase'] = new Chart(document.getElementById('chartDetoxIMCCase'), {
                 type: 'bar',
@@ -672,8 +619,7 @@
                 psych_case: 0, psych_comp: 0,
                 detox_case: 0, detox_comp: 0,
                 imc_case: 0, imc_comp: 0,
-                income: 0, expense: 0,
-                hw_case: 0, hw_comp: 0
+                income: 0, expense: 0
             };
 
             data.forEach((row) => {
@@ -686,8 +632,6 @@
                 totals.imc_comp += parseCurrency(row.imc_comp);
                 totals.income += parseCurrency(row.income);
                 totals.expense += parseCurrency(row.expense);
-                totals.hw_case += parseCurrency(row.hw_case);
-                totals.hw_comp += parseCurrency(row.hw_comp);
 
                 const globalIndex = globalData.indexOf(row);
                 let tr = document.createElement('tr');
@@ -703,8 +647,6 @@
                     <td>${formatCurrency(row.detox_comp)}</td>
                     <td>${row.imc_case}</td>
                     <td>${formatCurrency(row.imc_comp)}</td>
-                    <td>${row.hw_case}</td>
-                    <td>${formatCurrency(row.hw_comp)}</td>
                     <td class="text-green-600 font-bold">${formatCurrency(row.income)}</td>
                     <td class="text-red-500 font-bold">${formatCurrency(row.expense)}</td>
                 `;
@@ -723,8 +665,6 @@
                 <td class="p-2 text-center">${formatCurrency(totals.detox_comp)}</td>
                 <td class="p-2 text-center">${totals.imc_case}</td>
                 <td class="p-2 text-center">${formatCurrency(totals.imc_comp)}</td>
-                <td class="p-2 text-center">${totals.hw_case}</td>
-                <td class="p-2 text-center">${formatCurrency(totals.hw_comp)}</td>
                 <td class="p-2 text-center text-green-700">${formatCurrency(totals.income)}</td>
                 <td class="p-2 text-center text-red-600">${formatCurrency(totals.expense)}</td>
             `;
@@ -801,8 +741,6 @@
             document.getElementById('inpImcComp').value = parseCurrency(d.imc_comp);
             document.getElementById('inpIncome').value = parseCurrency(d.income);
             document.getElementById('inpExpense').value = parseCurrency(d.expense);
-            document.getElementById('inpHWCase').value = d.hw_case;
-            document.getElementById('inpHWComp').value = parseCurrency(d.hw_comp);
             document.getElementById('modalTitle').innerText = "แก้ไขข้อมูล";
             document.getElementById('dataModal').classList.remove('hidden');
         }
@@ -830,8 +768,6 @@
                 imc_comp: Number(document.getElementById('inpImcComp').value),
                 income: Number(document.getElementById('inpIncome').value),
                 expense: Number(document.getElementById('inpExpense').value),
-                hw_case: Number(document.getElementById('inpHWCase').value),
-                hw_comp: Number(document.getElementById('inpHWComp').value),
             };
             if (editingIndex === -1) globalData.push(newData);
             else globalData[editingIndex] = newData;
@@ -895,16 +831,14 @@
                 imc_case: row['จำนวนเคส IMC'] || row['จำนวนเคส IMC '] || 0,
                 imc_comp: row[' ชดเชย IMC '] || row['ชดเชย IMC'] || 0,
                 income: row['รายได้รวม'] || 0,
-                expense: row['รายจ่ายรวม'] || 0,
-                hw_case: row['จำนวนเคส HW'] || 0,
-                hw_comp: row['ชดเชย HW'] || 0
+                expense: row['รายจ่ายรวม'] || 0
             }));
             if(mappedData.length > 0) { globalData = mappedData; localStorage.setItem('hospitalDashboardData', JSON.stringify(globalData)); renderDashboard(); }
         }
         function exportCSV() {
             const csvRows = [];
-            csvRows.push(['เดือน /ปี','จำนวนเคสจิตบำบัด','ชดเชยจิตบำบัด','จำนวนเคส Detox','ชดเชย Detox','จำนวนเคส IMC','ชดเชย IMC','จำนวนเคส HW','ชดเชย HW','รายได้รวม','รายจ่ายรวม']);
-            globalData.forEach(row => { csvRows.push([row.month, row.psych_case, row.psych_comp, row.detox_case, row.detox_comp, row.imc_case, row.imc_comp, row.hw_case, row.hw_comp, row.income, row.expense]); });
+            csvRows.push(['เดือน /ปี','จำนวนเคสจิตบำบัด','ชดเชยจิตบำบัด','จำนวนเคส Detox','ชดเชย Detox','จำนวนเคส IMC','ชดเชย IMC','รายได้รวม','รายจ่ายรวม']);
+            globalData.forEach(row => { csvRows.push([row.month, row.psych_case, row.psych_comp, row.detox_case, row.detox_comp, row.imc_case, row.imc_comp, row.income, row.expense]); });
             let csvContent = "data:text/csv;charset=utf-8," + csvRows.map(e => e.join(",")).join("\n");
             var encodedUri = encodeURI(csvContent);
             var link = document.createElement("a");
